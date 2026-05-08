@@ -1,8 +1,8 @@
 # ipwhois-python
 
-[![PyPI Version](https://img.shields.io/pypi/v/ipwhois-python.svg)](https://pypi.org/project/ipwhois-python/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/ipwhois-python.svg)](https://pypi.org/project/ipwhois-python/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PyPI Version](https://img.shields.io/pypi/v/ipwhois-python.svg?v=1)](https://pypi.org/project/ipwhois-python/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/ipwhois-python.svg?v=1)](https://pypi.org/project/ipwhois-python/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?v=1)](LICENSE)
 
 Official, dependency-free Python client for the [ipwhois.io](https://ipwhois.io) IP Geolocation API.
 
@@ -314,4 +314,4 @@ Issues and pull requests are welcome on
 
 ## License
 
-[MIT](LICENSE) © ipwhois.io 
+[MIT](LICENSE) © ipwhois.io
