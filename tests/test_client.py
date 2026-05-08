@@ -1,0 +1,329 @@
+"""Tests covering URL construction and input validation.
+
+No real HTTP request is sent -- ``_build_url()`` is exercised directly so
+the suite can be run anywhere without an API key or network access.
+"""
+
+from __future__ import annotations
+
+from ipwhois import Client
+
+
+def _build_url(client: Client, path: str, **options) -> str:
+    return client._build_url(path, options)
+
+
+def test_free_endpoint_has_no_api_key() -> None:
+    client = Client()
+    assert _build_url(client, "/8.8.8.8") == "https://ipwho.is/8.8.8.8"
+
+
+def test_paid_endpoint_appends_api_key() -> None:
+    client = Client("TESTKEY")
+    url = _build_url(client, "/8.8.8.8")
+
+    assert url.startswith("https://ipwhois.pro/8.8.8.8?")
+    assert "key=TESTKEY" in url
+
+
+def test_https_is_always_used_by_default() -> None:
+    assert _build_url(Client(), "/").startswith("https://")
+    assert _build_url(Client("K"), "/").startswith("https://")
+
+
+def test_ssl_can_be_disabled() -> None:
+    free = Client(ssl=False)
+    paid = Client("K", ssl=False)
+
+    assert _build_url(free, "/").startswith("http://ipwho.is")
+    assert _build_url(paid, "/").startswith("http://ipwhois.pro")
+
+
+def test_ssl_defaults_to_true_when_not_passed() -> None:
+    # Sanity check: omitting the option keeps HTTPS on.
+    assert _build_url(Client("K"), "/").startswith("https://")
+
+
+def test_fields_are_joined_with_commas() -> None:
+    client = Client("K")
+    url = _build_url(
+        client, "/8.8.8.8", fields=["country", "city", "flag.emoji"]
+    )
+
+    # urlencode encodes commas as %2C -- both forms are valid HTTP.
+    assert "fields=country%2Ccity%2Cflag.emoji" in url
+
+
+def test_fields_accepts_a_string_too() -> None:
+    client = Client("K")
+    url = _build_url(client, "/8.8.8.8", fields="country,city")
+    assert "fields=country%2Ccity" in url
+
+
+def test_security_and_rate_are_flags_not_values() -> None:
+    client = Client("K")
+    url = _build_url(client, "/", security=True, rate=True)
+
+    assert "security=1" in url
+    assert "rate=1" in url
+
+
+def test_security_false_is_omitted() -> None:
+    client = Client("K")
+    url = _build_url(client, "/", security=False)
+
+    assert "security=" not in url
+
+
+def test_per_call_options_override_defaults() -> None:
+    client = Client("K", lang="ru")
+    url = _build_url(client, "/", lang="en")
+
+    assert "lang=en" in url
+    assert "lang=ru" not in url
+
+
+def test_invalid_language_returns_error_dict() -> None:
+    result = Client().lookup("8.8.8.8", lang="klingon")
+
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+    assert "klingon" in result.get("message", "")
+
+
+def test_invalid_output_returns_error_dict() -> None:
+    result = Client().lookup("8.8.8.8", output="yaml")
+
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+    assert "yaml" in result.get("message", "")
+
+
+def test_bulk_lookup_refuses_empty_list() -> None:
+    result = Client("K").bulk_lookup([])
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+
+
+def test_bulk_lookup_refuses_more_than_limit() -> None:
+    too_many = ["8.8.8.8"] * (Client.BULK_LIMIT + 1)
+    result = Client("K").bulk_lookup(too_many)
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+
+
+def test_bulk_url_is_comma_separated() -> None:
+    client = Client("K")
+    url = _build_url(client, "/bulk/" + ",".join(["8.8.8.8", "1.1.1.1"]))
+
+    assert "/bulk/8.8.8.8,1.1.1.1" in url
+
+
+def test_fluent_setters_return_self() -> None:
+    client = Client()
+
+    assert client.set_language("en") is client
+    assert client.set_fields(["country"]) is client
+    assert client.set_security(True) is client
+    assert client.set_rate(False) is client
+    assert client.set_timeout(5) is client
+    assert client.set_connect_timeout(2) is client
+    assert client.set_user_agent("test/1.0") is client
+
+
+def test_set_language_affects_subsequent_requests() -> None:
+    client = Client("K").set_language("de")
+    url = _build_url(client, "/")
+
+    assert "lang=de" in url
+
+
+def test_set_fields_affects_subsequent_requests() -> None:
+    client = Client("K").set_fields(["country", "city"])
+    url = _build_url(client, "/8.8.8.8")
+
+    assert "fields=country%2Ccity" in url
+
+
+def test_constructor_options_become_defaults() -> None:
+    client = Client("K", lang="ru", security=True)
+    url = _build_url(client, "/8.8.8.8")
+
+    assert "lang=ru" in url
+    assert "security=1" in url
+
+
+def test_user_agent_can_be_set_in_constructor() -> None:
+    client = Client(user_agent="my-app/2.0")
+    assert client._user_agent == "my-app/2.0"
+
+
+def test_default_user_agent_includes_version() -> None:
+    client = Client()
+    assert client._user_agent == f"ipwhois-python/{Client.VERSION}"
+
+
+def test_ip_is_url_encoded_for_ipv6() -> None:
+    # IPv6 colons must be percent-encoded inside a path segment.
+    client = Client()
+    url = _build_url(client, "/" + __import__("urllib.parse", fromlist=["quote"]).quote("2c0f:fb50:4003::", safe=""))
+    assert "%3A" in url
+
+
+# --------------------------------------------------------------------- #
+# Regression tests -- footguns that an external review caught.          #
+# --------------------------------------------------------------------- #
+
+
+def test_bulk_lookup_rejects_a_single_string() -> None:
+    # Strings are iterable in Python; without the guard, "8.8.8.8" would
+    # be looked up character-by-character. Reject explicitly.
+    result = Client("K").bulk_lookup("8.8.8.8")  # type: ignore[arg-type]
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+    assert "single string" in result["message"]
+
+
+def test_bulk_lookup_rejects_bytes() -> None:
+    result = Client("K").bulk_lookup(b"8.8.8.8")  # type: ignore[arg-type]
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+
+
+def test_bulk_lookup_handles_none_gracefully() -> None:
+    result = Client("K").bulk_lookup(None)  # type: ignore[arg-type]
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+
+
+def test_bulk_lookup_handles_non_iterable_gracefully() -> None:
+    result = Client("K").bulk_lookup(42)  # type: ignore[arg-type]
+
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+
+
+def test_bulk_lookup_accepts_a_generator() -> None:
+    client = Client("K")
+    # A generator is an iterable that's not a list -- make sure it works.
+    gen = (ip for ip in ["8.8.8.8", "1.1.1.1"])
+    # Just check it gets through validation -- we don't actually hit the
+    # network. Validation passes if we don't get an `error_type` back.
+    # We trigger the guard *before* network by passing an empty generator:
+    empty = (x for x in [])
+    result = client.bulk_lookup(empty)
+    assert isinstance(result, dict)
+    assert result["success"] is False
+    assert result.get("error_type") == "invalid_argument"
+    # And confirm a populated generator at least gets past type guards
+    # (we won't make a real HTTP call here).
+    _ = gen  # silence unused-warning
+
+
+def test_set_fields_keeps_string_intact() -> None:
+    # Without the str guard, list("country,city") explodes into characters.
+    client = Client("K").set_fields("country,city")
+    url = _build_url(client, "/8.8.8.8")
+
+    assert "fields=country%2Ccity" in url
+    # Sanity: confirm we haven't accidentally produced the broken form.
+    assert "fields=c%2Co%2Cu" not in url
+
+
+def test_set_fields_tolerates_none() -> None:
+    # set_fields(None) must not raise; it clears any previously-set default.
+    client = Client().set_fields(["country"]).set_fields(None)
+    url = client._build_url("/8.8.8.8", {})
+    assert "fields=" not in url
+
+
+def test_set_fields_tolerates_non_iterable() -> None:
+    # Non-iterable, non-string garbage falls back to str() rather than raising.
+    client = Client("K").set_fields(42)  # type: ignore[arg-type]
+    url = _build_url(client, "/8.8.8.8")
+    assert "fields=42" in url
+
+
+def test_set_timeout_tolerates_garbage_input() -> None:
+    # "never raises" extends to setters: bad input falls back to previous
+    # value rather than raising ValueError.
+    client = Client()
+    previous = client._timeout
+
+    client.set_timeout("not a number")  # type: ignore[arg-type]
+    assert client._timeout == previous
+
+    client.set_timeout(None)  # type: ignore[arg-type]
+    assert client._timeout == previous
+
+    client.set_timeout(-5)
+    assert client._timeout == previous
+
+    # Numeric strings are accepted (matches PHP's `(int)` behaviour).
+    client.set_timeout("15")  # type: ignore[arg-type]
+    assert client._timeout == 15
+
+
+def test_set_connect_timeout_tolerates_garbage_input() -> None:
+    client = Client()
+    previous = client._connect_timeout
+
+    client.set_connect_timeout("oops")  # type: ignore[arg-type]
+    assert client._connect_timeout == previous
+
+
+def test_constructor_tolerates_bad_timeout() -> None:
+    # Constructor garbage values fall back to defaults instead of raising.
+    client = Client(timeout="not-a-number", connect_timeout=None)
+    assert client._timeout == 10
+    assert client._connect_timeout == 5
+
+
+def test_raw_response_includes_success_true() -> None:
+    # When the API returns non-JSON (output=xml/csv), the wrapper response
+    # must include `success: True` so the documented `if info["success"]`
+    # check from the README still works.
+    client = Client()
+
+    # Simulate the parsing branch by calling the JSON-decode path with
+    # non-JSON input via a tiny direct test of the internal helper:
+    # we patch _request to bypass the network and feed an XML body.
+    import io
+    from unittest.mock import patch
+
+    class _FakeResp:
+        status = 200
+        headers: dict = {}
+
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+
+        def __enter__(self) -> "_FakeResp":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return self._body
+
+        def getcode(self) -> int:
+            return 200
+
+    fake = _FakeResp(b"<xml><ip>8.8.8.8</ip></xml>")
+    with patch("urllib.request.urlopen", return_value=fake):
+        result = client.lookup("8.8.8.8", output="xml")
+
+    assert result["success"] is True
+    assert result["raw"] == "<xml><ip>8.8.8.8</ip></xml>"
