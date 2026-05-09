@@ -91,14 +91,6 @@ def test_invalid_language_returns_error_dict() -> None:
     assert "klingon" in result.get("message", "")
 
 
-def test_invalid_output_returns_error_dict() -> None:
-    result = IPWhois().lookup("8.8.8.8", output="yaml")
-
-    assert result["success"] is False
-    assert result.get("error_type") == "invalid_argument"
-    assert "yaml" in result.get("message", "")
-
-
 def test_bulk_lookup_refuses_empty_list() -> None:
     result = IPWhois("K").bulk_lookup([])
 
@@ -290,16 +282,24 @@ def test_constructor_tolerates_bad_timeout() -> None:
     assert ipwhois._connect_timeout == 5
 
 
-def test_raw_response_includes_success_true() -> None:
-    # When the API returns non-JSON (output=xml/csv), the wrapper response
-    # must include `success: True` so the documented `if info["success"]`
-    # check from the README still works.
-    ipwhois = IPWhois()
+def test_output_option_is_silently_dropped() -> None:
+    # The `output` parameter was removed in 1.0.2. Passing it must NOT raise
+    # or trip validation -- it's just ignored, and the resulting URL must
+    # not contain an `output=...` query string.
+    ipwhois = IPWhois("K")
+    url = ipwhois._build_url("/8.8.8.8", {"output": "xml", "lang": "en"})
 
-    # Simulate the parsing branch by calling the JSON-decode path with
-    # non-JSON input via a tiny direct test of the internal helper:
-    # we patch _request to bypass the network and feed an XML body.
-    import io
+    assert "output=" not in url
+    # Other options next to it still work.
+    assert "lang=en" in url
+
+
+def test_non_json_response_is_treated_as_error() -> None:
+    # The API always returns JSON. A non-JSON 2xx body now indicates a
+    # transport problem (gateway error page, captive portal, ...) rather
+    # than legitimate XML/CSV output -- the `output` parameter was
+    # removed in 1.0.2. Expect a `success: False` error dict instead of
+    # the old `{"success": True, "raw": ...}` wrapper.
     from unittest.mock import patch
 
     class _FakeResp:
@@ -321,9 +321,10 @@ def test_raw_response_includes_success_true() -> None:
         def getcode(self) -> int:
             return 200
 
-    fake = _FakeResp(b"<xml><ip>8.8.8.8</ip></xml>")
+    fake = _FakeResp(b"<html>captive portal</html>")
     with patch("urllib.request.urlopen", return_value=fake):
-        result = ipwhois.lookup("8.8.8.8", output="xml")
+        result = IPWhois().lookup("8.8.8.8")
 
-    assert result["success"] is True
-    assert result["raw"] == "<xml><ip>8.8.8.8</ip></xml>"
+    assert result["success"] is False
+    assert "Invalid JSON" in result.get("message", "")
+    assert result.get("http_status") == 200

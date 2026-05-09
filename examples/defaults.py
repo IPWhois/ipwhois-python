@@ -14,7 +14,7 @@ from ipwhois import IPWhois
 ipwhois = (
     IPWhois("YOUR_API_KEY")
     .set_language("en")
-    .set_fields(["country", "city", "flag.emoji", "connection.isp"])
+    .set_fields(["success", "country", "city", "flag.emoji", "connection.isp"])
     .set_security(True)
     .set_timeout(8)
 )

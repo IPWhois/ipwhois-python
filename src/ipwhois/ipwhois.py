@@ -55,7 +55,7 @@ class IPWhois:
     """
 
     #: Library version, used in the default User-Agent header.
-    VERSION: str = "1.0.1"
+    VERSION: str = "1.0.2"
 
     #: Free-plan endpoint host (used when no API key is provided).
     HOST_FREE: str = "ipwho.is"
@@ -78,16 +78,13 @@ class IPWhois:
         "ja",
     )
 
-    #: Output formats supported by the ``output`` parameter.
-    SUPPORTED_OUTPUTS: tuple = ("json", "xml", "csv")
-
     def __init__(self, api_key: Optional[str] = None, **options: Any) -> None:
         """Create a new client.
 
         :param api_key: Your ipwhois.io API key. Omit for the free plan.
         :param options: Optional defaults applied to every request. Recognised
-            keys: ``lang``, ``fields``, ``security``, ``rate``, ``output``,
-            ``ssl``, ``timeout``, ``connect_timeout``, ``user_agent``.
+            keys: ``lang``, ``fields``, ``security``, ``rate``, ``ssl``,
+            ``timeout``, ``connect_timeout``, ``user_agent``.
         """
         self._api_key: Optional[str] = api_key
         self._user_agent: str = str(
@@ -117,7 +114,7 @@ class IPWhois:
 
         :param ip: IPv4 or IPv6 address. ``None`` (default) = current IP.
         :param options: Per-call options: ``lang``, ``fields``,
-            ``security`` (bool), ``rate`` (bool), ``output``.
+            ``security`` (bool), ``rate`` (bool).
         :returns: Decoded JSON response. On any error (API, network, bad
             input) the dict contains ``success`` set to ``False`` and a
             ``message``. The library never raises.
@@ -232,10 +229,14 @@ class IPWhois:
     ) -> "IPWhois":
         """Restrict every response to a fixed set of fields by default.
 
+        Include ``"success"`` in the list if you rely on ``info["success"]``
+        for error checking -- when ``fields`` is set, the API only returns
+        the fields you ask for.
+
         :param fields: An iterable of field names, e.g.
-            ``["country", "city", "flag.emoji"]``. A pre-joined comma-separated
-            string is also accepted and passed through unchanged. Pass
-            ``None`` to clear any previously-set default.
+            ``["success", "country", "city", "flag.emoji"]``. A pre-joined
+            comma-separated string is also accepted and passed through
+            unchanged. Pass ``None`` to clear any previously-set default.
         """
         # Strings are iterable in Python, so list("country,city") would
         # explode into individual characters. Keep strings as strings.
@@ -317,17 +318,6 @@ class IPWhois:
                 "error_type": "invalid_argument",
             }
 
-        output = merged.get("output")
-        if output is not None and output not in self.SUPPORTED_OUTPUTS:
-            return {
-                "success": False,
-                "message": (
-                    f'Unsupported output format "{output}". Supported: '
-                    f"{', '.join(self.SUPPORTED_OUTPUTS)}."
-                ),
-                "error_type": "invalid_argument",
-            }
-
         return None
 
     def _build_url(self, path: str, options: Dict[str, Any]) -> str:
@@ -344,9 +334,6 @@ class IPWhois:
 
         if "lang" in merged and merged["lang"] is not None:
             query.append(("lang", str(merged["lang"])))
-
-        if "output" in merged and merged["output"] is not None:
-            query.append(("output", str(merged["output"])))
 
         if "fields" in merged and merged["fields"] is not None:
             fields = merged["fields"]
@@ -432,23 +419,19 @@ class IPWhois:
             try:
                 decoded = json.loads(body)
             except json.JSONDecodeError:
-                # Non-JSON output is legitimate when output=xml or output=csv
-                # was requested -- return a thin wrapper so the caller still
-                # gets the raw payload. `success: True` is added so the
-                # documented `if info["success"]` check stays valid for raw
-                # responses too.
-                if 200 <= status < 300:
-                    return {"success": True, "raw": body}
-
-                # Non-JSON 4xx/5xx -- synthesise an error dict so the caller
-                # can handle it the same way as a normal API error.
+                # The ipwhois API always returns JSON. A non-JSON body means
+                # something went wrong upstream (gateway error page, captive
+                # portal, hijacked response, ...) -- synthesise an error dict
+                # so the caller can handle it the same way as a normal API
+                # error.
                 snippet = " ".join(body.split())
                 if len(snippet) > 200:
                     snippet = snippet[:200] + "\u2026"
                 return {
                     "success": False,
                     "message": (
-                        f"HTTP {status} returned by ipwhois API: {snippet}"
+                        f"Invalid JSON returned by ipwhois API "
+                        f"(HTTP {status}): {snippet}"
                     ),
                     "http_status": status,
                 }

@@ -86,42 +86,40 @@ on the client as a default.
 | ------------ | ------- | -------------------- | ---------------------------------------------------------------------- |
 | `lang`       | str     | Free + Paid          | One of: `en`, `ru`, `de`, `es`, `pt-BR`, `fr`, `zh-CN`, `ja`           |
 | `fields`     | list    | Free + Paid          | Restrict the response to specific fields (e.g. `["country", "city"]`)  |
-| `output`     | str     | Free + Paid          | `json` (default), `xml`, `csv`                                         |
 | `rate`       | bool    | Basic and above      | Include the `rate` block (`limit`, `remaining`)                        |
 | `security`   | bool    | Business and above   | Include the `security` block (proxy/vpn/tor/hosting)                   |
 
 ### Setting defaults once
 
-If you make many calls with the same options, set them once and forget:
+Every option can be passed two ways: **per call** (as a keyword argument to
+`lookup()` / `bulk_lookup()`) or **once as a default** on the client. Per-call
+options always override the defaults, so it's safe to set sensible defaults
+and only override what differs for a specific call.
+
+Defaults are set with fluent setters — `set_language()`, `set_fields()`,
+`set_security()`, `set_rate()`, `set_timeout()`, `set_connect_timeout()`,
+`set_user_agent()` — and can be chained:
 
 ```python
-# Free plan
+# Pass "YOUR_API_KEY" to the constructor for the paid plan; otherwise omit it.
 ipwhois = (
     IPWhois()
     .set_language("en")
-    .set_fields(["country", "city", "flag.emoji"])
+    .set_fields(["success", "country", "city", "flag.emoji"])
     .set_timeout(8)
 )
 
-ipwhois.lookup("8.8.8.8")                  # uses all of the above
-ipwhois.lookup("1.1.1.1", lang="de")       # per-call options override defaults
+ipwhois.lookup("8.8.8.8")              # uses lang=en, the field whitelist, and timeout=8
+ipwhois.lookup("1.1.1.1", lang="de")   # overrides lang for this single call only
 ```
 
-```python
-# Paid plan
-ipwhois = (
-    IPWhois("YOUR_API_KEY")
-    .set_language("en")
-    .set_fields(["country", "city", "flag.emoji"])
-    .set_timeout(8)
-)
+> ⚠️ When you restrict fields with `set_fields()` (or the per-call `fields=`
+> keyword), the API only returns the fields you ask for. Always include
+> `"success"` in the list if you rely on `info["success"]` for error
+> checking — otherwise the field will be missing on responses.
 
-ipwhois.lookup("8.8.8.8")                  # uses all of the above
-ipwhois.lookup("1.1.1.1", lang="de")       # per-call options override defaults
-```
-
-> ℹ️ Paid plans additionally support `set_security(True)` (Business+) and
-> `set_rate(True)` (Basic+). See the table above for what's available where.
+> ℹ️ `set_security(True)` requires Business+ and `set_rate(True)` requires
+> Basic+. See the table above for what's available where.
 
 ## HTTPS encryption
 
