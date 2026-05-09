@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import sys
 
-from ipwhois import Client
+from ipwhois import IPWhois
 
 
-client = Client("YOUR_API_KEY")
+ipwhois = IPWhois("YOUR_API_KEY")
 
 ips = [
     "8.8.8.8",
@@ -25,7 +25,7 @@ ips = [
     "2c0f:fb50:4003::",     # IPv6 is fine too -- mix freely
 ]
 
-results = client.bulk_lookup(ips, lang="en", security=True)
+results = ipwhois.bulk_lookup(ips, lang="en", security=True)
 
 # Whole-batch failure (network down, bad API key, rate limit, ...) -- the
 # response is a single error dict instead of a list of per-IP results.

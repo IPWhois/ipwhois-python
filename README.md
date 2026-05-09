@@ -22,7 +22,7 @@ pip install ipwhois-python
 
 ## Free vs Paid plan
 
-The same `Client` class is used for both plans. The only difference is whether
+The same `IPWhois` class is used for both plans. The only difference is whether
 you pass an API key:
 
 - **Free plan** — create the client **without arguments**. No API key, no
@@ -32,10 +32,10 @@ you pass an API key:
   threat-detection data.
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
-free = Client()                 # Free plan — no API key
-paid = Client("YOUR_API_KEY")   # Paid plan — with API key
+free = IPWhois()                 # Free plan — no API key
+paid = IPWhois("YOUR_API_KEY")   # Paid plan — with API key
 ```
 
 Everything else (`lookup()`, options, error handling) is identical.
@@ -43,11 +43,11 @@ Everything else (`lookup()`, options, error handling) is identical.
 ## Quick start — Free plan (no API key)
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
-client = Client()  # no API key
+ipwhois = IPWhois()  # no API key
 
-info = client.lookup("8.8.8.8")
+info = ipwhois.lookup("8.8.8.8")
 
 print(info["country"], info["flag"]["emoji"])
 # → United States 🇺🇸
@@ -61,11 +61,11 @@ print(f"{info['city']}, {info['region']}")
 Get an API key at <https://ipwhois.io> and pass it to the constructor:
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
-client = Client("YOUR_API_KEY")  # with API key
+ipwhois = IPWhois("YOUR_API_KEY")  # with API key
 
-info = client.lookup("8.8.8.8")
+info = ipwhois.lookup("8.8.8.8")
 
 print(info["country"], info["flag"]["emoji"])
 # → United States 🇺🇸
@@ -74,7 +74,7 @@ print(f"{info['city']}, {info['region']}")
 # → Mountain View, California
 ```
 
-> ℹ️ Pass nothing to look up your own public IP: `client.lookup()` — works
+> ℹ️ Pass nothing to look up your own public IP: `ipwhois.lookup()` — works
 > on both plans.
 
 ## Lookup options
@@ -96,28 +96,28 @@ If you make many calls with the same options, set them once and forget:
 
 ```python
 # Free plan
-client = (
-    Client()
+ipwhois = (
+    IPWhois()
     .set_language("en")
     .set_fields(["country", "city", "flag.emoji"])
     .set_timeout(8)
 )
 
-client.lookup("8.8.8.8")                  # uses all of the above
-client.lookup("1.1.1.1", lang="de")       # per-call options override defaults
+ipwhois.lookup("8.8.8.8")                  # uses all of the above
+ipwhois.lookup("1.1.1.1", lang="de")       # per-call options override defaults
 ```
 
 ```python
 # Paid plan
-client = (
-    Client("YOUR_API_KEY")
+ipwhois = (
+    IPWhois("YOUR_API_KEY")
     .set_language("en")
     .set_fields(["country", "city", "flag.emoji"])
     .set_timeout(8)
 )
 
-client.lookup("8.8.8.8")                  # uses all of the above
-client.lookup("1.1.1.1", lang="de")       # per-call options override defaults
+ipwhois.lookup("8.8.8.8")                  # uses all of the above
+ipwhois.lookup("1.1.1.1", lang="de")       # per-call options override defaults
 ```
 
 > ℹ️ Paid plans additionally support `set_security(True)` (Business+) and
@@ -130,17 +130,17 @@ example, in environments without an up-to-date CA bundle), pass `ssl=False`
 to the constructor:
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
 # Free plan
-client = Client(ssl=False)
+ipwhois = IPWhois(ssl=False)
 ```
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
 # Paid plan
-client = Client("YOUR_API_KEY", ssl=False)
+ipwhois = IPWhois("YOUR_API_KEY", ssl=False)
 ```
 
 > ℹ️ HTTPS is strongly recommended for production traffic — your API key is
@@ -153,11 +153,11 @@ address counts as one credit. Available on the **Business** and **Unlimited**
 plans.
 
 ```python
-from ipwhois import Client
+from ipwhois import IPWhois
 
-client = Client("YOUR_API_KEY")
+ipwhois = IPWhois("YOUR_API_KEY")
 
-results = client.bulk_lookup([
+results = ipwhois.bulk_lookup([
     "8.8.8.8",
     "1.1.1.1",
     "208.67.222.222",
@@ -184,7 +184,7 @@ with `success` set to `False` and a `message`. Just check
 `info["success"]` after every call:
 
 ```python
-info = client.lookup("8.8.8.8")
+info = ipwhois.lookup("8.8.8.8")
 
 if not info["success"]:
     print(f"Lookup failed: {info['message']}")
@@ -211,7 +211,7 @@ include extra fields you can branch on:
 ```python
 import time
 
-info = client.lookup("8.8.8.8")
+info = ipwhois.lookup("8.8.8.8")
 
 if not info["success"]:
     if info.get("http_status") == 429:

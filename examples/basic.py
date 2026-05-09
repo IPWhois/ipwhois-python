@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import sys
 
-from ipwhois import Client
+from ipwhois import IPWhois
 
 
 # -----------------------------------------------------------------------
 # 1) Free plan -- no API key, ~1 request/second per client IP.
 # -----------------------------------------------------------------------
-client = Client()
+ipwhois = IPWhois()
 
-info = client.lookup("8.8.8.8")
+info = ipwhois.lookup("8.8.8.8")
 
 # All errors -- invalid IP, network failure, bad options, ... -- come back
 # here with success == False. The library never raises.
@@ -33,7 +33,7 @@ print(
 # -----------------------------------------------------------------------
 # 2) Look up the caller's own IP -- pass nothing (or None).
 # -----------------------------------------------------------------------
-me = client.lookup()
+me = ipwhois.lookup()
 if me["success"]:
     print(f"My IP: {me['ip']} -- {me['country']}")
 
@@ -41,7 +41,7 @@ if me["success"]:
 # -----------------------------------------------------------------------
 # 3) Paid plan -- supply the API key.
 # -----------------------------------------------------------------------
-paid = Client("YOUR_API_KEY")
+paid = IPWhois("YOUR_API_KEY")
 
 info = paid.lookup(
     "1.1.1.1",

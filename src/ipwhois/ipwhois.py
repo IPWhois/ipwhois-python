@@ -2,16 +2,18 @@
 
 Quick start
 -----------
+    from ipwhois import IPWhois
+
     # Free plan (no API key, ~1 request/second per client IP)
-    client = ipwhois.Client()
-    info   = client.lookup("8.8.8.8")
+    ipwhois = IPWhois()
+    info    = ipwhois.lookup("8.8.8.8")
 
     # Paid plan (with API key, higher limits, bulk, security data, ...)
-    client = ipwhois.Client("YOUR_API_KEY")
-    info   = client.lookup("8.8.8.8", lang="en", security=True)
+    ipwhois = IPWhois("YOUR_API_KEY")
+    info    = ipwhois.lookup("8.8.8.8", lang="en", security=True)
 
     # Bulk lookup -- up to 100 IPs in one call (paid only)
-    rows = client.bulk_lookup(["8.8.8.8", "1.1.1.1", "208.67.222.222"])
+    rows = ipwhois.bulk_lookup(["8.8.8.8", "1.1.1.1", "208.67.222.222"])
 
     # HTTPS is enabled by default. Pass ssl=False to fall back to HTTP.
 
@@ -32,7 +34,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Iterable, List, Optional, Union
 
-__all__ = ["Client"]
+__all__ = ["IPWhois"]
 
 # Public type alias: a single API response (lookup or whole-batch error).
 Response = Dict[str, Any]
@@ -40,7 +42,7 @@ Response = Dict[str, Any]
 BulkResponse = Union[List[Response], Response]
 
 
-class Client:
+class IPWhois:
     """Client for the ipwhois.io IP Geolocation API.
 
     The same class is used for both the Free and Paid plans -- the only
@@ -53,7 +55,7 @@ class Client:
     """
 
     #: Library version, used in the default User-Agent header.
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.1"
 
     #: Free-plan endpoint host (used when no API key is provided).
     HOST_FREE: str = "ipwho.is"
@@ -217,7 +219,7 @@ class Client:
 
     # -- Fluent setters ------------------------------------------------- #
 
-    def set_language(self, lang: str) -> "Client":
+    def set_language(self, lang: str) -> "IPWhois":
         """Set the default language used when none is supplied per call.
 
         :param lang: One of :attr:`SUPPORTED_LANGUAGES`.
@@ -227,7 +229,7 @@ class Client:
 
     def set_fields(
         self, fields: Union[str, Iterable[str], None]
-    ) -> "Client":
+    ) -> "IPWhois":
         """Restrict every response to a fixed set of fields by default.
 
         :param fields: An iterable of field names, e.g.
@@ -251,17 +253,17 @@ class Client:
                 self._defaults["fields"] = str(fields)
         return self
 
-    def set_security(self, enabled: bool) -> "Client":
+    def set_security(self, enabled: bool) -> "IPWhois":
         """Enable or disable threat-detection data on every call by default."""
         self._defaults["security"] = bool(enabled)
         return self
 
-    def set_rate(self, enabled: bool) -> "Client":
+    def set_rate(self, enabled: bool) -> "IPWhois":
         """Enable or disable the ``rate`` block in responses by default."""
         self._defaults["rate"] = bool(enabled)
         return self
 
-    def set_timeout(self, seconds: Any) -> "Client":
+    def set_timeout(self, seconds: Any) -> "IPWhois":
         """Set the per-request total timeout in seconds (default: 10).
 
         Bad values (non-numeric, negative) silently fall back to the default,
@@ -270,7 +272,7 @@ class Client:
         self._timeout = _coerce_positive_int(seconds, self._timeout)
         return self
 
-    def set_connect_timeout(self, seconds: Any) -> "Client":
+    def set_connect_timeout(self, seconds: Any) -> "IPWhois":
         """Set the connection timeout in seconds (default: 5).
 
         Note: Python's :mod:`urllib` exposes a single timeout that covers
@@ -287,7 +289,7 @@ class Client:
         )
         return self
 
-    def set_user_agent(self, user_agent: str) -> "Client":
+    def set_user_agent(self, user_agent: str) -> "IPWhois":
         """Override the User-Agent header sent with every request."""
         self._user_agent = str(user_agent)
         return self
@@ -502,7 +504,7 @@ def _coerce_positive_int(value: Any, default: int) -> int:
     """Coerce ``value`` to a positive int, falling back to ``default``.
 
     Mirrors PHP's lenient ``(int)`` cast so that a stray ``"foo"`` passed
-    via constructor kwargs or :meth:`Client.set_timeout` doesn't blow up
+    via constructor kwargs or :meth:`IPWhois.set_timeout` doesn't blow up
     the whole client. ``None``, non-numeric strings, ``True``/``False``
     edge cases, negative numbers and zero all map to ``default``.
     """

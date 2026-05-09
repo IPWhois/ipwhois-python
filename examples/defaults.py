@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import sys
 
-from ipwhois import Client
+from ipwhois import IPWhois
 
 
-client = (
-    Client("YOUR_API_KEY")
+ipwhois = (
+    IPWhois("YOUR_API_KEY")
     .set_language("en")
     .set_fields(["country", "city", "flag.emoji", "connection.isp"])
     .set_security(True)
@@ -30,12 +30,12 @@ def show(label: str, info: dict) -> None:
 
 
 # Both calls below will use lang=en, the field whitelist, and security=1.
-google = client.lookup("8.8.8.8")
-cf     = client.lookup("1.1.1.1")
+google = ipwhois.lookup("8.8.8.8")
+cf     = ipwhois.lookup("1.1.1.1")
 
 show("8.8.8.8", google)
 show("1.1.1.1", cf)
 
 # One-off override -- this single call uses German instead of English.
-de_only = client.lookup("8.8.4.4", lang="de")
+de_only = ipwhois.lookup("8.8.4.4", lang="de")
 show("8.8.4.4 (de)", de_only)
