@@ -55,7 +55,7 @@ class IPWhois:
     """
 
     #: Library version, used in the default User-Agent header.
-    VERSION: str = "1.0.2"
+    VERSION: str = "1.2.0"
 
     #: Free-plan endpoint host (used when no API key is provided).
     HOST_FREE: str = "ipwho.is"
@@ -434,6 +434,7 @@ class IPWhois:
                         f"(HTTP {status}): {snippet}"
                     ),
                     "http_status": status,
+                    "error_type": "api",
                 }
 
         if not isinstance(decoded, (dict, list)):
@@ -457,12 +458,6 @@ class IPWhois:
                         "message": message,
                         "http_status": status,
                     }
-
-                if status == 429 and "retry-after" in headers:
-                    try:
-                        decoded["retry_after"] = int(headers["retry-after"])
-                    except (TypeError, ValueError):
-                        pass
             else:
                 # List response with error status -- wrap as an error dict.
                 decoded = {
@@ -470,11 +465,32 @@ class IPWhois:
                     "message": f"HTTP {status} returned by ipwhois API",
                     "http_status": status,
                 }
-                if status == 429 and "retry-after" in headers:
-                    try:
-                        decoded["retry_after"] = int(headers["retry-after"])
-                    except (TypeError, ValueError):
-                        pass
+
+            # `Retry-After` is only emitted by the free-plan endpoint
+            # (ipwho.is); the paid endpoint (ipwhois.pro) does not send the
+            # header, so don't try to read it there.
+            if (
+                status == 429
+                and self._api_key is None
+                and "retry-after" in headers
+            ):
+                try:
+                    decoded["retry_after"] = int(headers["retry-after"])
+                except (TypeError, ValueError):
+                    pass
+
+        # Tag every API-shaped error (`success: False` returned by the API,
+        # on any HTTP status) with `error_type: 'api'` so callers can branch
+        # on the category alongside the non-API codes ('network',
+        # 'environment', 'invalid_argument'). HTTP 2xx + success=false bodies
+        # (e.g. "Invalid IP address", "Reserved range") are otherwise passed
+        # through untouched.
+        if (
+            isinstance(decoded, dict)
+            and decoded.get("success") is False
+            and "error_type" not in decoded
+        ):
+            decoded["error_type"] = "api"
 
         # For HTTP 2xx with `success: false` (e.g. "Invalid IP address",
         # "Reserved range") we just pass the body through -- it is already

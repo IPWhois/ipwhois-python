@@ -5,6 +5,37 @@ All notable changes to `ipwhois-python` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-10
+
+### Added
+
+- Every error response now carries an `error_type` field, including errors
+  returned by the API. The new value `'api'` joins the existing `'network'`
+  and `'invalid_argument'` codes, so callers can branch on the category of
+  any failure with a single `info["error_type"]` check — no need to combine
+  `success` with `http_status` to distinguish API vs. non-API errors.
+  Applies to HTTP 4xx / 5xx responses, malformed JSON bodies, and HTTP 2xx
+  responses where the API itself sets `success: false` (e.g. "Invalid IP
+  address", "Reserved range").
+
+### Changed
+
+- `retry_after` is now only attached to HTTP 429 responses on the **free
+  plan** (`ipwho.is`). The paid endpoint (`ipwhois.pro`) does not send a
+  `Retry-After` header, so reading it on paid plans is now skipped and the
+  field will not appear there. Behaviour on the free plan is unchanged.
+- README "Setting defaults once" section now shows the Free and Paid plans
+  as two separate code blocks, matching the layout used in "Quick start"
+  and "HTTPS encryption". The setters work identically on both plans, so
+  the lookup-override snippet is shared underneath.
+- README "Error response fields" table now lists `message` explicitly (it
+  has always been present on every error response) and the `error_type`
+  row covers the new `'api'` value as well.
+- The `_request()` HTTP-error code path was lightly refactored so the
+  `Retry-After` header is parsed in one place instead of two (one for the
+  dict branch and one for the list branch). No behaviour change beyond the
+  free-plan gating noted above.
+
 ## [1.0.2] - 2026-05-10
 
 ### Removed

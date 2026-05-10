@@ -328,3 +328,120 @@ def test_non_json_response_is_treated_as_error() -> None:
     assert result["success"] is False
     assert "Invalid JSON" in result.get("message", "")
     assert result.get("http_status") == 200
+    assert result.get("error_type") == "api"
+
+
+# --------------------------------------------------------------------- #
+# Response shaping -- the urllib layer is stubbed via mock.patch so      #
+# the suite can exercise error tagging without making real HTTP calls.  #
+# --------------------------------------------------------------------- #
+
+
+class _FakeOkResp:
+    """Minimal stand-in for a urllib response context manager (HTTP 2xx)."""
+
+    def __init__(self, status: int, body: bytes, headers: dict) -> None:
+        self.status = status
+        self._body = body
+        self.headers = headers
+
+    def __enter__(self) -> "_FakeOkResp":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+    def getcode(self) -> int:
+        return self.status
+
+
+def _fake_http_error(status: int, body: bytes, headers: dict):
+    """Build a urllib.error.HTTPError for status >= 400.
+
+    The 4xx / 5xx code path inside ``_request`` is reached via this
+    exception, not via the success branch, so tests that target it have
+    to make ``urlopen`` raise.
+    """
+    import io
+    import urllib.error
+
+    return urllib.error.HTTPError(
+        url="https://example.test",
+        code=status,
+        msg="error",
+        hdrs=headers,  # type: ignore[arg-type]
+        fp=io.BytesIO(body),
+    )
+
+
+def test_2xx_with_success_false_is_tagged_as_api_error() -> None:
+    # The API returns 200 with `success: False` for things like
+    # "Reserved range" or "Invalid IP address" -- these should be passed
+    # through without `http_status` (which is reserved for 4xx/5xx),
+    # but tagged with `error_type: 'api'` so callers can branch on the
+    # category the same way they branch on 'network' / 'environment' /
+    # 'invalid_argument'.
+    from unittest.mock import patch
+
+    body = (
+        b'{"success": false, "message": "Reserved range", "ip": "127.0.0.1"}'
+    )
+    fake = _FakeOkResp(200, body, headers={})
+    with patch("urllib.request.urlopen", return_value=fake):
+        result = IPWhois().lookup("127.0.0.1")
+
+    assert result["success"] is False
+    assert result.get("message") == "Reserved range"
+    assert result.get("ip") == "127.0.0.1"
+    assert "http_status" not in result
+    assert result.get("error_type") == "api"
+
+
+def test_4xx_response_is_normalised_with_error_type_api() -> None:
+    from unittest.mock import patch
+
+    body = b'{"success": false, "message": "Invalid API key"}'
+    err = _fake_http_error(401, body, headers={})
+    with patch("urllib.request.urlopen", side_effect=err):
+        result = IPWhois("BAD").lookup("8.8.8.8")
+
+    assert result["success"] is False
+    assert result.get("http_status") == 401
+    assert result.get("message") == "Invalid API key"
+    assert result.get("error_type") == "api"
+
+
+def test_429_on_free_plan_attaches_retry_after() -> None:
+    # The free-plan endpoint (ipwho.is) sends `Retry-After` on rate-limit
+    # responses; the client surfaces it as `retry_after`.
+    from unittest.mock import patch
+
+    body = b'{"success": false, "message": "Rate limited"}'
+    err = _fake_http_error(429, body, headers={"retry-after": "42"})
+    with patch("urllib.request.urlopen", side_effect=err):
+        result = IPWhois().lookup("8.8.8.8")  # free plan -- no API key
+
+    assert result["success"] is False
+    assert result.get("http_status") == 429
+    assert result.get("retry_after") == 42
+    assert result.get("error_type") == "api"
+
+
+def test_429_on_paid_plan_does_not_attach_retry_after() -> None:
+    # The paid endpoint (ipwhois.pro) does not send `Retry-After`. Even
+    # if a header is present (proxies, test stubs, ...), the client
+    # ignores it on paid plans so `retry_after` will not appear.
+    from unittest.mock import patch
+
+    body = b'{"success": false, "message": "Rate limited"}'
+    err = _fake_http_error(429, body, headers={"retry-after": "42"})
+    with patch("urllib.request.urlopen", side_effect=err):
+        result = IPWhois("KEY").lookup("8.8.8.8")  # paid plan
+
+    assert result["success"] is False
+    assert result.get("http_status") == 429
+    assert "retry_after" not in result
+    assert result.get("error_type") == "api"
