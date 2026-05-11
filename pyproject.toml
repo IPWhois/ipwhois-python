@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ipwhois-python"
-version = "1.2.0"
+version = "1.2.1"
 description = "Official Python client for the ipwhois.io IP Geolocation API. Simple, dependency-free, supports single and bulk IP lookups."
 readme = "README.md"
 license = { file = "LICENSE" }

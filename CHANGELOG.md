@@ -5,6 +5,20 @@ All notable changes to `ipwhois-python` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-05-11
+
+### Changed
+
+- README "Error response fields" table now lists `success` explicitly as the
+  first row — it is always present on error responses (set to `false`) and
+  is the canonical field to branch on. Previously the table started with
+  `message`, even though every example in the README checks `info["success"]`.
+- README "Response shape" example for errors updated to show an HTTP 429
+  scenario (rate limit) instead of an HTTP 400 (invalid IP). The new example
+  illustrates `retry_after` as a real present field rather than a commented-
+  out hint, which better reflects how callers actually consume the response
+  on the free plan.
+
 ## [1.2.0] - 2026-05-10
 
 ### Added

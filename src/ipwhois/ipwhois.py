@@ -55,7 +55,7 @@ class IPWhois:
     """
 
     #: Library version, used in the default User-Agent header.
-    VERSION: str = "1.2.0"
+    VERSION: str = "1.2.1"
 
     #: Free-plan endpoint host (used when no API key is provided).
     HOST_FREE: str = "ipwho.is"
